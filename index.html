@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Geometry jump: Alpha</title>
+<meta name="description" content="Играть в Geometry jump: Alpha — классический браузерный 2D-платформер с кубиком и шипами. Пройдите все уровни сложности!">
+<meta name="keywords" content="Geometry jump, Geometry jump Alpha, браузерная игра, игра про кубик, геометрический прыжок альфа">
+    <style>
+        * { box-sizing: border-box; user-select: none; }
+        body {
+            margin: 0; padding: 0; background: #04040c;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 100vh; font-family: Arial, sans-serif; color: #ffffff; overflow: hidden;
+        }
+        #devNotice {
+            background: rgba(156, 39, 176, 0.1); border: 2px dashed #9c27b0;
+            padding: 12px; border-radius: 8px; max-width: 600px; text-align: center; margin-bottom: 15px;
+            box-shadow: 0 0 15px rgba(156, 39, 176, 0.2);
+        }
+        #devNotice h2 { color: #e040fb; margin: 0 0 6px 0; font-size: 16px; letter-spacing: 1px; }
+        #devNotice ul { margin: 0; padding: 0 0 0 20px; text-align: left; color: #b388ff; font-size: 12px; line-height: 1.4; }
+        #skinSelector { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; max-width: 600px; margin-bottom: 15px; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; }
+        .skin-btn {
+            width: 40px; height: 40px; border: 3px solid #ffffff; border-radius: 6px; cursor: pointer;
+            transition: transform 0.2s; display: flex; align-items: center; justify-content: center; font-size: 18px; position: relative;
+        }
+        .skin-btn:hover:not(.locked) { transform: scale(1.15); }
+        .skin-btn.active { border-color: #ffeb3b; box-shadow: 0 0 10px #ffeb3b; }
+        .skin-btn.locked { background: #222 !important; border-color: #555; cursor: not-allowed; opacity: 0.4; }
+        .lock-badge { position: absolute; bottom: -14px; font-size: 8px; color: #ff5722; font-weight: bold; }
+        #gameContainer { position: relative; box-shadow: 0 15px 40px rgba(0,0,0,0.8); border-radius: 6px; overflow: hidden; }
+        canvas { display: block; }
+        #ui { position: absolute; top: 15px; left: 15px; font-size: 22px; font-weight: bold; text-shadow: 2px 2px 4px #000; pointer-events: none; display: flex; flex-direction: column; gap: 2px; }
+        #highscoreUI { font-size: 16px; color: #ffeb3b; }
+        #stageInfo { position: absolute; top: 15px; right: 15px; font-size: 18px; font-weight: bold; text-shadow: 2px 2px 4px #000; pointer-events: none; text-align: right; }
+        #modifierInfo { font-size: 13px; color: #ff5722; font-weight: normal; margin-top: 2px; }
+    </style>
+</head>
+<body>
+
+    <div id="devNotice">
+        <h2>ИГРА В СТАДИИ РАЗРАБОТКИ</h2>
+        <ul>
+            <li>Баг частоты развёртки: на экранах 144Hz+ скорость игры может рассинхронизироваться.</li>
+            <li>Эффект инерции: при мгновенном рестарте кубик может совершить микро-рывок.</li>
+            <li>Просчёт хитбоксов: из-за формы треугольника возможно столкновение на границе текстуры.</li>
+        </ul>
+    </div>
+
+    <div id="skinSelector">
+        <div id="btn-icon0" class="skin-btn active" style="background: #9c27b0;" onclick="changeIcon(0, this)">🙂</div>
+        <div id="btn-icon1" class="skin-btn locked" style="background: #f44336;" onclick="changeIcon(1, this)">🤖<div class="lock-badge">5</div></div>
+        <div id="btn-icon2" class="skin-btn locked" style="background: #2196f3;" onclick="changeIcon(2, this)">🎧<div class="lock-badge">10</div></div>
+        <div id="btn-icon3" class="skin-btn locked" style="background: #e91e63;" onclick="changeIcon(3, this)">😈<div class="lock-badge">15</div></div>
+        <div id="btn-icon4" class="skin-btn locked" style="background: #4caf50;" onclick="changeIcon(4, this)">🥷<div class="lock-badge">20</div></div>
+        <div id="btn-icon5" class="skin-btn locked" style="background: #ff9800;" onclick="changeIcon(5, this)">🐱<div class="lock-badge">25</div></div>
+        <div id="btn-icon6" class="skin-btn locked" style="background: #00bcd4;" onclick="changeIcon(6, this)">👽<div class="lock-badge">30</div></div>
+        <div id="btn-icon7" class="skin-btn locked" style="background: #3f51b5;" onclick="changeIcon(7, this)">👁️<div class="lock-badge">35</div></div>
+        <div id="btn-icon8" class="skin-btn locked" style="background: #795548;" onclick="changeIcon(8, this)">💀<div class="lock-badge">40</div></div>
+        <div id="btn-icon9" class="skin-btn locked" style="background: #ffeb3b;" onclick="changeIcon(9, this)">👑<div class="lock-badge">50</div></div>
+    </div>
+
+    <div id="gameContainer">
+        <div id="ui">
+            <div>Очки: <span id="scoreVal">0</span></div>
+            <div id="highscoreUI">Рекорд: <span id="highscoreVal">0</span></div>
+        </div>
+        <div id="stageInfo">
+            <div id="stageName" style="color: #00ffff;">Загрузка...</div>
+            <div id="modifierInfo">Сложность: Нормально</div>
+        </div>
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+    </div>
+
+<script>
+const canvas = document.getElementById("gameCanvas"), ctx = canvas.getContext("2d");
+const scoreVal = document.getElementById("scoreVal"), highscoreVal = document.getElementById("highscoreVal");
+const stageName = document.getElementById("stageName"), modifierInfo = document.getElementById("modifierInfo");
+
+const GROUND_Y = canvas.height - 80;
+let currentGravity = 0.6, currentJumpForce = -11.5, gameSpeed = 4.8, score = 0, currentStageIndex = 0, highscore = 0;
+highscoreVal.textContent = highscore;
+
+let gameObjects = [], spawnTimer = 0, isPlaying = true, loopId = null, distanceTraveled = 0;
+const stages = [
+    { name: "Часть 1: Ночь", mod: "Уровень сложности: 1 | Стабильно", color: "#00ffff", bgTop: "#0f0f2d", bgBottom: "#1a1a40", ground: "#141430", speed: 4.8, gravity: 0.6, jump: -11.5, dbl: false },
+    { name: "Часть 2: Адский мир", mod: "Уровень сложности: 2 | Двойные шипы!", color: "#ff3333", bgTop: "#2d0f0f", bgBottom: "#4a1515", ground: "#301414", speed: 6.5, gravity: 0.6, jump: -12.2, dbl: true },
+    { name: "Часть 3: Неоновый каньон", mod: "Уровень сложности: 3 | Тяжелый вес!", color: "#e040fb", bgTop: "#230f2d", bgBottom: "#3b154a", ground: "#281430", speed: 6.0, gravity: 0.9, jump: -14.2, dbl: false },
+    { name: "Часть 4: Космическая бездна", mod: "Уровень сложности: 4 | Без гравитации!", color: "#ffeb3b", bgTop: "#1c2324", bgBottom: "#2d383a", ground: "#1e2627", speed: 7.8, gravity: 0.35, jump: -9.0, dbl: true }
+];
+
+const skinsConfig = [
+    { id: 0, req: 0, color: "#9c27b0", type: "default" }, { id: 1, req: 5, color: "#f44336", type: "creoper" },
+    { id: 2, req: 10, color: "#2196f3", type: "headphones" }, { id: 3, req: 15, color: "#e91e63", type: "demon" },
+    { id: 4, req: 20, color: "#4caf50", type: "ninja" }, { id: 5, req: 25, color: "#ff9800", type: "cat" },
+    { id: 6, req: 30, color: "#00bcd4", type: "alien" }, { id: 7, req: 35, color: "#3f51b5", type: "cyclops" },
+    { id: 8, req: 40, color: "#795548", type: "skull" }, { id: 9, req: 50, color: "#ffeb3b", type: "king" }
+];
+let currentSkinIndex = 0;
+
+function checkLockStates() {
+    skinsConfig.forEach(skin => {
+        let btn = document.getElementById("btn-icon" + skin.id);
+        if (highscore >= skin.req) { btn.classList.remove("locked"); let b = btn.querySelector(".lock-badge"); if (b) b.style.display = "none"; }
+        else { btn.classList.add("locked"); }
+    });
+}
+function changeIcon(id, buttonEl) { if (highscore < skinsConfig[id].req) return; currentSkinIndex = id; document.querySelectorAll('.skin-btn').forEach(btn => btn.classList.remove('active')); buttonEl.classList.add('active'); }
+const player = {
+    size: 40, x: 100, y: GROUND_Y - 40, velocityY: 0, isGrounded: true, rotation: 0,
+    jump() {
+        if (!isPlaying) return;
+        if (this.isGrounded) { this.velocityY = currentJumpForce; this.isGrounded = false; }
+    },
+    update() {
+        this.velocityY += currentGravity; this.y += this.velocityY;
+        if (this.y >= GROUND_Y - this.size) { this.y = GROUND_Y - this.size; this.velocityY = 0; this.isGrounded = true; this.rotation = Math.round(this.rotation / 90) * 90 % 360; }
+        if (!this.isGrounded) this.rotation = (this.rotation + (gameSpeed * 0.85)) % 360;
+    },
+    draw() {
+        ctx.save(); ctx.translate(this.x + this.size / 2, this.y + this.size / 2); ctx.rotate((this.rotation * Math.PI) / 180);
+        let skin = skinsConfig[currentSkinIndex]; ctx.fillStyle = skin.color; ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size);
+        ctx.strokeStyle = "#000000"; ctx.lineWidth = 4; ctx.strokeRect(-this.size / 2 + 4, -this.size / 2 + 4, this.size - 8, this.size - 8);
+        ctx.fillStyle = (skin.type === "demon") ? "#ff0000" : "#ffffff";
+        if (skin.type === "default") { ctx.fillRect(-10, -10, 6, 6); ctx.fillRect(4, -10, 6, 6); ctx.fillRect(-10, 4, 20, 4); }
+        else if (skin.type === "creoper") { ctx.fillRect(-11, -11, 7, 7); ctx.fillRect(4, -11, 7, 7); ctx.fillRect(-6, -4, 12, 12); ctx.fillStyle = "#000000"; ctx.fillRect(-4, 0, 8, 4); }
+        else if (skin.type === "headphones") { ctx.fillRect(-10, -8, 20, 6); ctx.fillStyle = "#ffeb3b"; ctx.fillRect(-this.size/2 - 2, -8, 5, 16); ctx.fillRect(this.size/2 - 3, -8, 5, 16); }
+        else if (skin.type === "demon") { ctx.beginPath(); ctx.moveTo(-12, -12); ctx.lineTo(-4, -6); ctx.lineTo(-12, -4); ctx.fill(); ctx.beginPath(); ctx.moveTo(12, -12); ctx.lineTo(4, -6); ctx.lineTo(12, -4); ctx.fill(); ctx.fillStyle = skin.color; ctx.beginPath(); ctx.moveTo(-16, -20); ctx.lineTo(-6, -16); ctx.lineTo(-16, -10); ctx.fill(); ctx.beginPath(); ctx.moveTo(16, -20); ctx.lineTo(6, -16); ctx.lineTo(16, -10); ctx.fill(); }
+        else if (skin.type === "ninja") { ctx.fillStyle = "#222"; ctx.fillRect(-this.size/2+4, -14, this.size-8, 10); ctx.fillStyle = "#fff"; ctx.fillRect(-8, -12, 5, 5); ctx.fillRect(3, -12, 5, 5); ctx.fillStyle = "#ff0000"; ctx.fillRect(-12, -14, 4, 4); }
+        else if (skin.type === "cat") { ctx.fillRect(-10, -8, 5, 5); ctx.fillRect(5, -8, 5, 5); ctx.fillStyle = "#000"; ctx.fillRect(-2, -2, 4, 3); ctx.fillStyle = skin.color; ctx.beginPath(); ctx.moveTo(-16, -16); ctx.lineTo(-6, -16); ctx.lineTo(-14, -23); ctx.fill(); ctx.beginPath(); ctx.moveTo(16, -16); ctx.lineTo(6, -16); ctx.lineTo(14, -23); ctx.fill(); }
+        else if (skin.type === "alien") { ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(-8, -6, 6, 9, Math.PI/6, 0, 2*Math.PI); ctx.fill(); ctx.beginPath(); ctx.ellipse(8, -6, 6, 9, -Math.PI/6, 0, 2*Math.PI); ctx.fill(); ctx.fillRect(-4, 6, 8, 2); }
+        else if (skin.type === "cyclops") { ctx.fillStyle = "#ff0044"; ctx.beginPath(); ctx.arc(0, -5, 9, 0, 2*Math.PI); ctx.fill(); ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(0, -5, 4, 0, 2*Math.PI); ctx.fill(); ctx.fillStyle = "#fff"; ctx.fillRect(-8, 6, 16, 3); }
+        else if (skin.type === "skull") { ctx.fillStyle = "#111"; ctx.fillRect(-10, -10, 7, 7); ctx.fillRect(3, -10, 7, 7); ctx.fillRect(-3, -1, 6, 4); ctx.fillStyle = "#fff"; ctx.fillRect(-10, 6, 3, 6); ctx.fillRect(-4, 6, 3, 6); ctx.fillRect(2, 6, 3, 6); ctx.fillRect(8, 6, 3, 6); }
+        else if (skin.type === "king") { ctx.fillRect(-10, -6, 5, 5); ctx.fillRect(5, -6, 5, 5); ctx.fillRect(-6, 6, 12, 3); ctx.fillStyle = "#ffeb3b"; ctx.beginPath(); ctx.moveTo(-16, -16); ctx.lineTo(-16, -26); ctx.lineTo(-8, -20); ctx.lineTo(0, -28); ctx.lineTo(8, -20); ctx.lineTo(16, -26); ctx.lineTo(16, -16); ctx.closePath(); ctx.fill(); ctx.fillStyle = "#ff0000"; ctx.fillRect(-2, -22, 4, 4); }
+        ctx.restore();
+    }
+};
+class LevelObject {
+    constructor(type, x, extra = false) {
+        this.type = type; this.x = x; this.w = 36; this.h = 36; this.y = GROUND_Y - this.h; this.isDouble = extra;
+    }
+    update() { this.x -= gameSpeed; }
+    draw() {
+        ctx.fillStyle = "#ff5722"; ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5;
+        this.drawSingleSpike(this.x);
+        if (this.isDouble) this.drawSingleSpike(this.x + this.w);
+    }
+    drawSingleSpike(xPos) {
+        ctx.beginPath(); ctx.moveTo(xPos, GROUND_Y); ctx.lineTo(xPos + this.w, GROUND_Y); ctx.lineTo(xPos + this.w/2, GROUND_Y - this.h); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    checkCollisions(p) {
+        if (!isPlaying) return;
+        let actualW = this.isDouble ? this.w * 2 : this.w;
+        let pL = p.x + 3, pR = p.x + p.size - 3, pT = p.y + 2, pB = p.y + p.size, oL = this.x, oR = this.x + actualW, oT = GROUND_Y - this.h, oB = GROUND_Y;
+        if (pR > oL && pL < oR && pB > oT && pT < oB) triggerReset();
+    }
+}
+
+function updateStageConfig() {
+    currentStageIndex = Math.min(Math.floor(score / 5), stages.length - 1);
+    let st = stages[currentStageIndex];
+    stageName.textContent = st.name; stageName.style.color = st.color; modifierInfo.textContent = st.mod;
+    gameSpeed = st.speed; currentGravity = st.gravity; currentJumpForce = st.jump;
+    distanceTraveled = 0;
+}
+
+function triggerReset() {
+    isPlaying = false;
+    cancelAnimationFrame(loopId); // Полное жесткое гашение анимации, убирает баг скорости
+    if (score > highscore) { highscore = score; highscoreVal.textContent = highscore; checkLockStates(); }
+    
+    player.y = GROUND_Y - player.size; player.velocityY = 0; player.isGrounded = true; player.rotation = 0;
+    gameObjects = []; score = 0; scoreVal.textContent = score; spawnTimer = 0;
+    
+    updateStageConfig();
+    isPlaying = true; loopId = requestAnimationFrame(gameLoop);
+}
+
+window.addEventListener("keydown", (e) => { if (e.code === "Space") { e.preventDefault(); player.jump(); } });
+canvas.addEventListener("mousedown", () => player.jump());
+canvas.addEventListener("touchstart", (e) => { e.preventDefault(); player.jump(); });
+
+function gameLoop() {
+    if (!isPlaying) return;
+    let st = stages[currentStageIndex];
+    let grad = ctx.createLinearGradient(0, 0, 0, canvas.height); grad.addColorStop(0, st.bgTop); grad.addColorStop(1, st.bgBottom); ctx.fillStyle = grad; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, GROUND_Y, canvas.width, 4); ctx.fillStyle = st.ground; ctx.fillRect(0, GROUND_Y + 4, canvas.width, canvas.height - GROUND_Y);
+
+    player.update(); player.draw();
+    
+    // Счетчик бега на локации: 9000 пикселей при скорости ~5.0 — это ровно 30 СЕКУНД бега!
+    distanceTraveled += gameSpeed;
+    if (distanceTraveled > 9000) {
+        score += 5; scoreVal.textContent = score; if (score > highscore) highscoreVal.textContent = score; updateStageConfig();
+    }
+
+    spawnTimer--;
+    if (spawnTimer <= 0 && isPlaying) {
+        if (gameObjects.length === 0 || gameObjects[gameObjects.length - 1].x < canvas.width - 280) {
+            let dbl = st.dbl && Math.random() > 0.5;
+            gameObjects.push(new LevelObject("spike", canvas.width + 50, dbl));
+            spawnTimer = 130 + Math.floor(Math.random() * 40);
+        }
+    }
+    for (let i = gameObjects.length - 1; i >= 0; i--) {
+        let obj = gameObjects[i]; obj.update(); obj.draw();
+        if (obj.x < -150) { gameObjects.splice(i, 1); continue; }
+        obj.checkCollisions(player);
+    }
+    if (isPlaying) loopId = requestAnimationFrame(gameLoop);
+}
+
+checkLockStates(); updateStageConfig(); gameLoop();
+</script>
+</body>
+</html>
